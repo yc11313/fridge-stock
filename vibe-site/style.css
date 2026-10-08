@@ -1,0 +1,170 @@
+/* 版面：標題列(按鈕) → 圓形主畫面(中間統計、周圍是儲存空間) → 點進去是食材清單
+   風格：Sunset Horizon 配色。珊瑚橘為主色、粉橘淡色塊、蜜桃橘輔助、緋紅只用在過期警示。 */
+
+/* ===== 1. 顏色與字型（想換配色只改這裡） ===== */
+:root{
+  --bg:#fff8f5;            /* 背景：極淡粉橘 */
+  --surface:#ffffff;       /* 卡片 */
+  --ink:#2b1d1a;           /* 文字：暖黑 */
+  --muted:#85655c;
+  --line:#ffd9cc;          /* 邊線 */
+  --accent:#e5532f;        /* 主色：珊瑚橘 */
+  --accent-ink:#ffffff;
+  --accent-soft:#ffe6dd;   /* 主色淡色（Secondary） */
+  --peach:#ffa866;         /* 輔助色（Accent） */
+  --peach-soft:#ffe3c9;
+  --ok:#2f7d57;   --ok-soft:#dff1e6;
+  --warn:#8f4600; --warn-soft:#ffe3c9;
+  --bad:#d4203d;  --bad-soft:#ffdbe0;   /* 緋紅：只用在過期 */
+  --font-body:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-en:"Montserrat","Helvetica Neue",Arial,sans-serif;
+  --r:16px;                /* 卡片圓角 */
+  --r-sm:10px;             /* 按鈕、輸入框圓角 */
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1f1412; --surface:#2b1c19; --ink:#ffeee8; --muted:#cdaea4; --line:#4b2e27;
+  --accent:#ff8a68; --accent-ink:#2b1410; --accent-soft:#4a2a22; --peach:#ffb272; --peach-soft:#4d3320;
+  --ok:#8fd9b0; --ok-soft:#1e3a2b; --warn:#ffc58a; --warn-soft:#4d3320; --bad:#ff8fa0; --bad-soft:#552029;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1f1412; --surface:#2b1c19; --ink:#ffeee8; --muted:#cdaea4; --line:#4b2e27;
+  --accent:#ff8a68; --accent-ink:#2b1410; --accent-soft:#4a2a22; --peach:#ffb272; --peach-soft:#4d3320;
+  --ok:#8fd9b0; --ok-soft:#1e3a2b; --warn:#ffc58a; --warn-soft:#4d3320; --bad:#ff8fa0; --bad-soft:#552029;
+  color-scheme:dark}
+
+/* ===== 2. 基本設定 ===== */
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.7 var(--font-body);padding-inline:16px;padding-block:24px 56px;overflow-x:hidden}
+.wrap{max-width:760px;margin-inline:auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:1.35rem;line-height:1.3;margin:0;font-weight:900;letter-spacing:.04em}
+h2{margin:0;font-size:1.1rem;font-weight:900;text-wrap:balance}
+.sub{color:var(--muted);font-size:.82rem;font-family:var(--font-en);font-weight:500}
+.hint{font-size:.82rem;font-weight:500;color:var(--muted);margin:0}
+.hint.center{text-align:center}
+.hint.ok{color:var(--ok)}
+.hint.err{color:var(--bad)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--peach);outline-offset:2px}
+
+/* ===== 3. 按鈕 ===== */
+.hbtns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:0;background:var(--surface);padding:8px 16px;border-radius:var(--r-sm);min-height:42px;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.btn.danger{color:var(--bad);background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--bad)}
+.btn.danger.armed{background:var(--bad);color:#fff}
+.btn[disabled]{opacity:.35;cursor:not-allowed}
+.btn[aria-expanded=true]{background:var(--accent-soft)}
+@media (prefers-reduced-motion:no-preference){
+  .btn{transition:transform .12s}
+  .btn:not([disabled]):hover{transform:translateY(-2px)}
+}
+
+/* ===== 4. 圓形主畫面 ===== */
+.orbit{position:relative;width:100%;max-width:560px;aspect-ratio:1;margin-inline:auto}
+.orbit::before{content:"";position:absolute;inset:calc((50 - var(--R,35)) * 1%);border:1.5px dashed var(--line);border-radius:50%}   /* 軌道線 */
+.ring{position:absolute;inset:0;animation:spin 120s linear infinite}
+.sp{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1;border:0;border-radius:50%;padding:0;display:grid;place-items:center;color:var(--ink);background:var(--accent-soft);box-shadow:0 0 0 1.5px var(--line) inset}
+.sp-in{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:8%;text-align:center;animation:spin-rev 120s linear infinite}   /* 反向轉，文字才會保持正的 */
+.sp-name{font-weight:900;font-size:clamp(.7rem,2.9vw,1rem);line-height:1.25;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sp-n{font:600 clamp(.62rem,2.3vw,.8rem)/1.2 var(--font-en)}
+.sp-plus{font:700 1.5rem/1 var(--font-en)}
+.flag{font-size:clamp(.58rem,2.1vw,.72rem);font-weight:700;color:#fff;background:var(--bad);border-radius:999px;padding:0 7px;line-height:1.5}
+.sp.is-soon{background:var(--peach-soft);box-shadow:0 0 0 2px var(--peach) inset}
+.sp.is-bad{background:var(--bad-soft);box-shadow:0 0 0 2px var(--bad) inset}
+.sp.add{background:transparent;box-shadow:none;border:1.5px dashed var(--muted);color:var(--muted)}
+.hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38%;aspect-ratio:1;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4%;text-align:center;box-shadow:0 0 0 10px var(--accent-soft)}
+.hub-num{font:800 clamp(2rem,10vw,3.4rem)/1 var(--font-en)}
+.hub-label{font-size:clamp(.7rem,2.6vw,.9rem);font-weight:700;margin-bottom:4px}
+.hub-sub{display:flex;flex-direction:column;font-size:clamp(.58rem,2.2vw,.75rem);line-height:1.35;opacity:.95}
+.hub-sub b{font-family:var(--font-en);font-weight:800}
+.orbit:hover .ring,.orbit:hover .sp-in,.orbit:focus-within .ring,.orbit:focus-within .sp-in{animation-play-state:paused}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spin-rev{to{transform:rotate(-360deg)}}
+@media (prefers-reduced-motion:no-preference){
+  .sp{transition:scale .15s}
+  .sp:hover{scale:1.08}
+  .hub::after{content:"";position:absolute;inset:-10px;border-radius:50%;border:2px solid var(--accent);animation:pulse 3s ease-out infinite}
+}
+@keyframes pulse{0%{transform:scale(.97);opacity:.7}100%{transform:scale(1.18);opacity:0}}
+@media (prefers-reduced-motion:reduce){.ring,.sp-in{animation:none}}
+
+.money-strip{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.tile{background:var(--surface);border:0;border-radius:var(--r);padding:10px 18px;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1 1 120px;max-width:200px;min-width:0;text-align:center}
+button.tile{cursor:pointer}
+.tile b{font:700 1.3rem/1.3 var(--font-en)}
+.tile span{font-size:.75rem;font-weight:700;color:var(--muted)}
+.tile.loss b{color:var(--bad)}
+.tile.manage{background:var(--accent);box-shadow:none}
+.tile.manage b,.tile.manage span{color:var(--accent-ink);font-family:var(--font-body);font-weight:900}
+.tile.manage span{font-weight:500;opacity:.9}
+.tile[aria-expanded=true]:not(.manage){background:var(--accent-soft)}
+button.tile:focus-visible{outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){button.tile{transition:transform .12s}button.tile:hover{transform:translateY(-2px)}}
+
+/* ===== 5. 食材清單頁 ===== */
+.d-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.d-title{min-width:0;flex:1 1 200px}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.tools input[type=search]{flex:1 1 200px;min-width:0;padding:10px 14px;border:0;border-radius:var(--r-sm);background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--line)}
+.tools select{padding:10px 12px;border:0;border-radius:var(--r-sm);background:var(--surface);min-width:0;box-shadow:inset 0 0 0 1.5px var(--line)}
+
+/* ===== 6. 管理面板 ===== */
+.panel{background:var(--surface);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:18px;box-shadow:inset 0 0 0 1.5px var(--line)}
+.seg{display:flex;gap:4px;padding:4px;background:var(--bg);border-radius:var(--r-sm);box-shadow:inset 0 0 0 1.5px var(--line)}
+.seg-btn{flex:1;border:0;background:none;border-radius:8px;padding:8px 6px;font-weight:700;font-size:.88rem;color:var(--muted);min-width:0}
+.seg-btn[aria-selected=true]{background:var(--accent);color:var(--accent-ink)}
+.pane{display:flex;flex-direction:column;gap:10px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.edit-row{display:flex;gap:8px;align-items:center}
+.edit-row input{flex:1;min-width:0;padding:8px 12px;border:0;border-radius:var(--r-sm);background:var(--bg);box-shadow:inset 0 0 0 1.5px var(--line)}
+.edit-row .btn{padding:4px 12px;min-height:36px;font-size:.82rem;flex:none}
+.edit-row .cnt{font:500 .78rem var(--font-en);color:var(--muted);flex:none}
+.pane .btns{display:flex;gap:10px;flex-wrap:wrap}
+.actions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}
+[hidden]{display:none!important}
+
+/* ===== 7. 新增／編輯表單 ===== */
+form{background:var(--surface);border-radius:var(--r);padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;box-shadow:inset 0 0 0 1.5px var(--line)}
+form h2{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;font-weight:700;color:var(--muted);min-width:0}
+label input,label select{padding:10px 12px;border:0;border-radius:var(--r-sm);background:var(--bg);color:var(--ink);min-width:0;width:100%;font-weight:500;box-shadow:inset 0 0 0 1.5px var(--line)}
+
+/* ===== 8. 成本長條圖 ===== */
+.cost{background:var(--surface);border-radius:var(--r);padding:18px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:inset 0 0 0 1.5px var(--line)}
+.cost-row{display:grid;grid-template-columns:minmax(64px,110px) 1fr auto;gap:12px;align-items:center;font-size:.9rem;font-weight:700}
+.cost-row .track{height:12px;border-radius:999px;background:var(--accent-soft);overflow:hidden}
+.cost-row .fill{height:100%;border-radius:999px;background:var(--accent)}
+.cost-row .amt{font-family:var(--font-en);font-weight:700;text-align:right}
+.cost-row .who{overflow-wrap:anywhere}
+.loss-row{display:flex;align-items:center;gap:12px;min-width:0}
+.loss-row .ico{width:40px;height:40px;font-size:1.3rem;background:var(--bad-soft)}
+.loss-main{flex:1;min-width:0}
+.loss-row .amt{font:700 .95rem var(--font-en);color:var(--bad);flex:none}
+
+/* ===== 9. 食材卡片 ===== */
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:0;margin:0;list-style:none}
+.item{background:var(--surface);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;box-shadow:inset 0 0 0 1.5px var(--line)}
+.top{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.top-text{min-width:0}
+.ico{font-size:1.5rem;line-height:1;flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent-soft);display:grid;place-items:center}
+.name{font-weight:900;font-size:1.02rem;overflow-wrap:anywhere}
+.meta{font-size:.8rem;color:var(--muted);overflow-wrap:anywhere}
+.badge{margin-left:auto;flex:none;font-size:.75rem;font-weight:700;padding:2px 12px;border-radius:999px;white-space:nowrap}
+.fresh .badge{background:var(--ok-soft);color:var(--ok)}
+.soon .badge{background:var(--warn-soft);color:var(--warn)}
+.expired .badge{background:var(--bad-soft);color:var(--bad)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.date{font:500 .85rem var(--font-en);color:var(--muted)}
+.qty{display:flex;align-items:center;gap:8px;font:600 .95rem var(--font-en)}
+.qty button{width:34px;height:34px;border-radius:50%;border:0;background:var(--accent-soft);line-height:1;font-weight:700}
+.money{font:700 .95rem var(--font-en)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
+.av{width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--ink);font-size:.7rem;font-weight:900;display:inline-grid;place-items:center;flex:none}
+.mini{display:flex;gap:8px;border-top:1.5px solid var(--line);padding-top:8px}
+.mini button{border:0;background:none;color:var(--ink);padding:2px 6px;font-size:.82rem;font-weight:700;text-decoration:underline;text-underline-offset:4px}
+.mini .del{color:var(--bad)}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:32px 0}
+footer{color:var(--muted);font-size:.78rem}
