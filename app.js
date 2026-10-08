@@ -18,8 +18,11 @@ const $ = (id) => document.getElementById(id);
 let view = 'home';         // 'home' = 圓形主畫面；'list' = 某個儲存空間（或全部）的食材清單
 let spaceFilter = 'all';   // 清單檢視時，目前看的儲存空間
 let memberFilter = 'all';  // 目前選的購買者篩選
+let isEditor = false;      // 登入且在編輯者白名單內，才能編輯與刪除
+let editId = null;         // 正在編輯的食材 id；null 表示新增
+let armed = null;          // 已按過一次「刪除」、等待第二次確認的 id
 
-/* ===== 2. 資料層：從 Supabase 讀取與新增 ===== */
+/* ===== 2. 資料層：從 Supabase 讀取、新增、修改、刪除 ===== */
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const offset = (n) => {
   const d = new Date();
@@ -51,6 +54,34 @@ async function insertRow(table, row) {
   const { data, error } = await sb.from(table).insert(row).select().single();
   if (error) throw error;
   return data;
+}
+
+// 修改一筆資料。資料庫擋下時（沒登入或不是編輯者）不會報錯而是回 0 筆，所以要自己檢查
+async function updateRow(table, id, patch) {
+  const { data, error } = await sb.from(table).update(patch).eq('id', id).select();
+  if (error) throw error;
+  if (!data.length) throw new Error('沒有權限修改，請先登入編輯者帳號');
+  return data[0];
+}
+
+async function deleteRow(table, id) {
+  const { data, error } = await sb.from(table).delete().eq('id', id).select();
+  if (error) throw error;
+  if (!data.length) throw new Error('沒有權限刪除，請先登入編輯者帳號');
+}
+
+// 登入狀態：有登入，而且資料庫確認是編輯者，才開放編輯與刪除
+async function refreshEditor() {
+  const { data: { session } } = await sb.auth.getSession();
+  isEditor = false;
+  if (session) {
+    const { data, error } = await sb.rpc('is_fridge_editor');
+    isEditor = !error && data === true;
+    $('loginBtn').textContent = isEditor ? '登出' : '登出（非編輯者）';
+  } else {
+    $('loginBtn').textContent = '登入';
+  }
+  $('loginBtn').dataset.in = session ? '1' : '';
 }
 
 /* ===== 3. 小工具 ===== */
@@ -239,7 +270,7 @@ function itemCard(i) {
     ? `<span class="av">${initial(buyer.name)}</span>${esc(buyer.name)} 買的`
     : '未指定購買者';
   return `
-    <li class="item ${statusOf(d)}">
+    <li class="item ${statusOf(d)}" data-id="${i.id}">
       <div class="top">
         <span class="ico" aria-hidden="true">${ICON[i.cat] || '📦'}</span>
         <div class="top-text">
@@ -249,26 +280,45 @@ function itemCard(i) {
         <span class="badge">${expiryLabel(d)}</span>
       </div>
       <div class="row">
-        <span class="qty">${i.qty} ${esc(i.unit)}</span>
+        ${isEditor
+          ? `<div class="qty"><button type="button" data-act="dec" aria-label="減少數量">−</button><span>${i.qty} ${esc(i.unit)}</span><button type="button" data-act="inc" aria-label="增加數量">＋</button></div>`
+          : `<span class="qty">${i.qty} ${esc(i.unit)}</span>`}
         <span class="date">${i.date}</span>
       </div>
       <div class="row">
         <span class="chip">${buyerHtml}</span>
         <span class="money">${money(valueOf(i))}</span>
       </div>
+      ${isEditor ? `<div class="mini">
+        <button type="button" data-act="edit">編輯</button>
+        <button type="button" class="del" data-act="del">${armed === i.id ? '再按一次確認刪除' : '刪除'}</button>
+      </div>` : ''}
     </li>`;
 }
 
-// 管理面板的兩個清單（只能新增，所以只列出名稱與數量）
+// 管理面板的兩個清單（編輯者可以改名與刪除，其他人只能看與新增）
+// 只在新增／刪除時重畫，改名時不重畫，輸入框才不會失去焦點
+function delBtn(kind, id) {
+  const isArmed = armed === id;
+  return `<button type="button" class="btn danger${isArmed ? ' armed' : ''}" data-del="${kind}">${isArmed ? '確認刪除' : '刪除'}</button>`;
+}
 function renderManage() {
   $('spaceList').innerHTML = S.spaces.map((s) => {
     const n = S.items.filter((i) => i.space === s.id).length;
-    return `<div class="edit-row"><span class="row-name">${esc(s.name)}</span><span class="cnt">${n} 項</span></div>`;
+    return isEditor
+      ? `<div class="edit-row" data-kind="space" data-id="${s.id}"><input value="${esc(s.name)}" maxlength="12" aria-label="儲存空間名稱"><span class="cnt">${n} 項</span>${delBtn('space', s.id)}</div>`
+      : `<div class="edit-row"><span class="row-name">${esc(s.name)}</span><span class="cnt">${n} 項</span></div>`;
   }).join('') || '<p class="hint">還沒有儲存空間，請在下方新增。</p>';
 
   $('memberList').innerHTML = S.members.map((m) =>
-    `<div class="edit-row"><span class="av">${initial(m.name)}</span><span class="row-name">${esc(m.name)}</span></div>`
+    isEditor
+      ? `<div class="edit-row" data-kind="member" data-id="${m.id}"><span class="av">${initial(m.name)}</span><input value="${esc(m.name)}" maxlength="10" aria-label="成員名稱">${delBtn('member', m.id)}</div>`
+      : `<div class="edit-row"><span class="av">${initial(m.name)}</span><span class="row-name">${esc(m.name)}</span></div>`
   ).join('') || '<p class="hint">還沒有成員，請在下方新增。</p>';
+
+  document.querySelectorAll('.perm-hint').forEach((el) => {
+    el.textContent = isEditor ? '你已登入，可以改名與刪除。' : '改名與刪除需要先登入編輯者帳號。';
+  });
 }
 
 function showBackupMessage(text, type = '') {
@@ -343,28 +393,84 @@ $('exportBtn').onclick = () => {
   showBackupMessage('已產生備份檔，請在下載資料夾找 fridge-backup 開頭的檔案。', 'ok');
 };
 
-/* --- 新增食材 --- */
-function openForm() {
+/* --- 編輯者：刪除與改名（儲存空間、成員） --- */
+// 刪除：第一次按進入「待確認」，第二次才真的刪
+async function onManageClick(e) {
+  const btn = e.target.closest('[data-del]');
+  if (!btn || !isEditor) return;
+  const { id } = btn.closest('.edit-row').dataset;
+  if (armed !== id) { armed = id; renderManage(); return; }
+  armed = null;
+  const isSpace = btn.dataset.del === 'space';
+  try {
+    await deleteRow(isSpace ? 'fridge_spaces' : 'fridge_members', id);
+    if (isSpace) {
+      S.spaces = S.spaces.filter((s) => s.id !== id);
+      S.items = S.items.filter((i) => i.space !== id);                 // 資料庫會一併刪掉空間裡的食材
+    } else {
+      S.members = S.members.filter((m) => m.id !== id);
+      S.items.forEach((i) => { if (i.buyer === id) i.buyer = ''; });   // 資料庫會把購買者改成未指定
+    }
+    renderManage(); renderAll();
+    showNotice('已刪除', 'ok', true);
+  } catch (err) {
+    renderManage();
+    showNotice(`刪除失敗：${err.message}`, 'err');
+  }
+}
+
+// 改名：輸入框離開焦點時儲存
+async function onManageChange(e) {
+  const input = e.target;
+  const row = input.closest('.edit-row');
+  if (input.tagName !== 'INPUT' || !row || !isEditor) return;
+  const isSpace = row.dataset.kind === 'space';
+  const list = isSpace ? S.spaces : S.members;
+  const record = list.find((x) => x.id === row.dataset.id);
+  const name = input.value.trim();
+  if (!record) return;
+  if (!name) { input.value = record.name; return; }
+  try {
+    await updateRow(isSpace ? 'fridge_spaces' : 'fridge_members', record.id, { name });
+    record.name = name;
+    const avatar = row.querySelector('.av');
+    if (avatar) avatar.textContent = name.charAt(0);
+    renderAll();
+    showNotice('已改名', 'ok', true);
+  } catch (err) {
+    input.value = record.name;
+    showNotice(`改名失敗：${err.message}`, 'err');
+  }
+}
+for (const id of ['spaceList', 'memberList']) {
+  $(id).onclick = onManageClick;
+  $(id).onchange = onManageChange;
+}
+
+/* --- 新增／編輯食材 --- */
+function openForm(item) {
+  editId = item ? item.id : null;
+  $('formTitle').textContent = item ? '編輯食材' : '新增食材';
   $('fSpace').innerHTML = S.spaces.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   $('fBuyer').innerHTML = '<option value="">未指定</option>' +
     S.members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
-  $('fName').value = '';
-  $('fCat').value = '蔬果';
-  $('fSpace').value = view === 'list' && spaceFilter !== 'all' ? spaceFilter : (S.spaces[0] || {}).id || '';
-  $('fQty').value = 1;
-  $('fUnit').value = '個';
-  $('fPrice').value = 0;
-  $('fBuyer').value = '';
-  $('fDate').value = offset(7);
+  $('fName').value = item ? item.name : '';
+  $('fCat').value = item ? item.cat : '蔬果';
+  $('fSpace').value = item ? item.space : (view === 'list' && spaceFilter !== 'all' ? spaceFilter : (S.spaces[0] || {}).id || '');
+  $('fQty').value = item ? item.qty : 1;
+  $('fUnit').value = item ? item.unit : '個';
+  $('fPrice').value = item ? item.price : 0;
+  $('fBuyer').value = item ? item.buyer : '';
+  $('fDate').value = item ? item.date : offset(7);
   $('form').hidden = false;
   $('fName').focus();
   $('form').scrollIntoView({ block: 'nearest' });
 }
-function closeForm() { $('form').hidden = true; }
+function closeForm() { $('form').hidden = true; editId = null; }
 
 $('addBtn').onclick = () => {
   if (!S.spaces.length) { showNotice('請先到「管理」新增一個儲存空間。', 'err'); return; }
-  openForm();
+  openForm(null);
 };
 $('cancelBtn').onclick = closeForm;
 $('form').onsubmit = async (e) => {
@@ -382,12 +488,18 @@ $('form').onsubmit = async (e) => {
   if (!row.name || !row.expiry || !row.space_id) return;
   const submit = e.submitter;
   if (submit) submit.disabled = true;
+  const editing = editId !== null;
   try {
-    S.items.push(toItem(await insertRow('fridge_items', row)));
+    if (editing) {
+      const saved = toItem(await updateRow('fridge_items', editId, row));
+      S.items = S.items.map((i) => (i.id === editId ? saved : i));
+    } else {
+      S.items.push(toItem(await insertRow('fridge_items', row)));
+    }
     closeForm(); renderAll();
-    showNotice(`已新增「${row.name}」`, 'ok', true);
+    showNotice(`已${editing ? '儲存' : '新增'}「${row.name}」`, 'ok', true);
   } catch (err) {
-    showNotice(`新增食材失敗：${err.message}`, 'err');
+    showNotice(`${editing ? '儲存' : '新增'}食材失敗：${err.message}`, 'err');
   } finally {
     if (submit) submit.disabled = false;
   }
@@ -414,6 +526,74 @@ window.addEventListener('hashchange', () => { route(); renderAll(); window.scrol
 $('q').oninput = renderList;
 $('memberFilter').onchange = (e) => { memberFilter = e.target.value; renderList(); };
 
+/* --- 編輯者：食材卡片上的數量加減、編輯、刪除 --- */
+$('list').onclick = async (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn || !isEditor) return;
+  const id = btn.closest('.item').dataset.id;
+  const item = S.items.find((i) => i.id === id);
+  if (!item) return;
+  const act = btn.dataset.act;
+  try {
+    if (act === 'inc' || act === 'dec') {
+      const qty = item.qty + (act === 'inc' ? 1 : -1);
+      if (qty < 1 || qty > 999) return;
+      await updateRow('fridge_items', id, { qty });
+      item.qty = qty; armed = null;
+    } else if (act === 'edit') {
+      armed = null; openForm(item); return;
+    } else if (act === 'del') {
+      if (armed !== id) { armed = id; renderList(); return; }
+      await deleteRow('fridge_items', id);
+      S.items = S.items.filter((i) => i.id !== id);
+      armed = null;
+      showNotice('已刪除', 'ok', true);
+    }
+    renderAll();
+  } catch (err) {
+    armed = null; renderList();
+    showNotice(`操作失敗：${err.message}`, 'err');
+  }
+};
+// 點到別處就取消「待確認刪除」
+document.addEventListener('click', (e) => {
+  if (armed === null || e.target.closest('.del') || e.target.closest('[data-del]')) return;
+  armed = null;
+  if (view === 'list') renderList();
+  if (!$('manage').hidden) renderManage();
+});
+
+/* --- 登入／登出 --- */
+function toggleLogin(open) {
+  $('loginPanel').hidden = !open;
+  if (open) { $('lEmail').focus(); $('loginMsg').textContent = ''; }
+}
+$('loginBtn').onclick = async () => {
+  if ($('loginBtn').dataset.in) {            // 已登入 → 登出
+    await sb.auth.signOut();
+    await refreshEditor();
+    closeForm(); renderManage(); renderAll();
+    showNotice('已登出', 'ok', true);
+  } else {
+    toggleLogin($('loginPanel').hidden);
+  }
+};
+$('loginCancel').onclick = () => toggleLogin(false);
+$('loginPanel').onsubmit = async (e) => {
+  e.preventDefault();
+  const submit = e.submitter;
+  if (submit) submit.disabled = true;
+  $('loginMsg').textContent = '登入中…';
+  const { error } = await sb.auth.signInWithPassword({ email: $('lEmail').value.trim(), password: $('lPass').value });
+  if (submit) submit.disabled = false;
+  if (error) { $('loginMsg').textContent = '登入失敗：帳號或密碼不正確。'; return; }
+  $('lPass').value = '';
+  await refreshEditor();
+  toggleLogin(false);
+  renderManage(); renderAll();
+  showNotice(isEditor ? '登入成功，可以編輯與刪除了' : '登入成功，但這個帳號不是編輯者，只能查看與新增', isEditor ? 'ok' : 'err', true);
+};
+
 /* --- 啟動：先顯示今天日期，再從雲端載入資料 --- */
 const weekday = ['日', '一', '二', '三', '四', '五', '六'];
 const now = new Date();
@@ -423,7 +603,7 @@ async function start() {
   showNotice('資料載入中…');
   renderAll();
   try {
-    await loadData();
+    await Promise.all([loadData(), refreshEditor()]);
     showNotice('');
   } catch (err) {
     showNotice(`無法讀取雲端資料：${err.message}。請重新整理頁面再試。`, 'err');

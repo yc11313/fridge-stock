@@ -175,3 +175,9 @@ footer{color:var(--muted);font-size:.78rem}
 .notice.err{background:var(--bad-soft);color:var(--bad)}
 .row-name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:700}
 .qty{font:600 .95rem var(--font-en)}
+
+/* ===== 11. 登入表單與編輯者按鈕 ===== */
+form.login{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+form.login .hint,form.login .actions{grid-column:1/-1}
+.edit-row .row-name+.cnt{margin-left:auto}
+.mini{align-items:center}
