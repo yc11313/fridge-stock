@@ -1,0 +1,9 @@
+.env
+.env.*
+*.key
+node_modules/
+.claude/
+.DS_Store
+# 舊風格備份，不上傳
+style-handdrawn.css
+style-sunbousai.css

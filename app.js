@@ -1,13 +1,13 @@
 'use strict';
 
 /* =====================================================
-   冰箱庫存管理
+   冰箱庫存管理（資料存在 Supabase 雲端資料庫）
    結構：1 設定 → 2 資料層 → 3 小工具 → 4 畫面層 → 5 事件層
+   示範版權限：任何人都能「讀取」與「新增」，不能修改或刪除（由資料庫的 RLS 規則把關）
    ===================================================== */
 
 /* ===== 1. 設定 ===== */
-const KEY = 'fridge-inventory-v2';
-const OLD_KEY = 'fridge-inventory-v1';
+const sb = window.supabaseClient;   // 由 index.html 建立
 const ICON = {
   '蔬果': '🥬', '肉類海鮮': '🥩', '蛋奶': '🥛', '飲品': '🧃',
   '熟食剩菜': '🍱', '調味乾貨': '🧂', '其他': '📦',
@@ -18,107 +18,39 @@ const $ = (id) => document.getElementById(id);
 let view = 'home';         // 'home' = 圓形主畫面；'list' = 某個儲存空間（或全部）的食材清單
 let spaceFilter = 'all';   // 清單檢視時，目前看的儲存空間
 let memberFilter = 'all';  // 目前選的購買者篩選
-let editId = null;         // 正在編輯的食材 id；null 表示新增
-let armed = null;          // 已按過一次「刪除」、等待第二次確認的 id
-let pendingImport = null;  // 已讀入、等待確認覆蓋的備份資料
 
-/* ===== 2. 資料層：讀取、儲存、示範資料、備份 ===== */
+/* ===== 2. 資料層：從 Supabase 讀取與新增 ===== */
+const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const offset = (n) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
   return iso(d);
 };
-const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const uid = (prefix) => prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-function demoData() {
-  const spaces = [
-    { id: 's1', name: '廚房冰箱（冷藏）' },
-    { id: 's2', name: '冷凍庫' },
-    { id: 's3', name: '儲藏櫃' },
-  ];
-  const members = [
-    { id: 'm1', name: '爸爸' },
-    { id: 'm2', name: '媽媽' },
-    { id: 'm3', name: '小明' },
-  ];
-  // [名稱, 分類, 空間, 數量, 單位, 單價, 購買者, 距離到期天數]
-  const rows = [
-    ['雞蛋', '蛋奶', 's1', 8, '顆', 7, 'm2', 9],
-    ['鮮奶', '蛋奶', 's1', 1, '瓶', 85, 'm1', 2],
-    ['高麗菜', '蔬果', 's1', 1, '顆', 60, 'm2', 5],
-    ['小番茄', '蔬果', 's1', 1, '盒', 70, 'm3', -1],
-    ['雞胸肉', '肉類海鮮', 's2', 3, '片', 55, 'm2', 40],
-    ['冷凍水餃', '熟食剩菜', 's2', 2, '袋', 140, 'm1', 75],
-    ['昨晚的滷肉', '熟食剩菜', 's1', 1, '盒', 0, 'm2', 1],
-    ['醬油', '調味乾貨', 's3', 1, '瓶', 95, 'm1', 210],
-    ['柳橙汁', '飲品', 's1', 2, '瓶', 60, 'm3', -3],
-  ];
-  const items = rows.map(([name, cat, space, qty, unit, price, buyer, days], i) => ({
-    id: 'i' + (i + 1), name, cat, space, qty, unit, price, buyer, date: offset(days),
-  }));
-  return { spaces, members, items };
+let S = { spaces: [], members: [], items: [] };   // S = 整個應用的資料
+
+// 資料庫欄位 → 畫面使用的格式
+const toItem = (r) => ({
+  id: r.id, name: r.name, cat: r.cat, space: r.space_id, qty: r.qty, unit: r.unit,
+  price: Number(r.price), buyer: r.buyer_id || '', date: r.expiry,
+});
+
+async function loadData() {
+  const [spaces, members, items] = await Promise.all([
+    sb.from('fridge_spaces').select('id,name').order('created_at'),
+    sb.from('fridge_members').select('id,name').order('created_at'),
+    sb.from('fridge_items').select('*').order('expiry'),
+  ]);
+  const failed = [spaces, members, items].find((r) => r.error);
+  if (failed) throw failed.error;
+  S = { spaces: spaces.data, members: members.data, items: items.data.map(toItem) };
 }
 
-// 第一版的資料沒有儲存空間與成員，搬進新格式
-function migrateV1(oldItems) {
-  const data = demoData();
-  const spaceOf = { '冷藏': 's1', '冷凍': 's2', '常溫': 's3' };
-  data.spaces = [
-    { id: 's1', name: '冷藏' },
-    { id: 's2', name: '冷凍' },
-    { id: 's3', name: '常溫' },
-  ];
-  data.items = oldItems.map((x) => ({
-    id: 'i' + x.id, name: x.name, cat: x.cat, space: spaceOf[x.loc] || 's1',
-    qty: x.qty, unit: x.unit, price: 0, buyer: '', date: x.date,
-  }));
+// 新增一筆資料，成功後回傳資料庫實際存下的那一筆
+async function insertRow(table, row) {
+  const { data, error } = await sb.from(table).insert(row).select().single();
+  if (error) throw error;
   return data;
-}
-
-function loadData() {
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data && data.spaces && data.members && data.items) return data;
-    }
-    const old = localStorage.getItem(OLD_KEY);
-    if (old) return migrateV1(JSON.parse(old));
-  } catch (e) { /* 讀不到就用示範資料 */ }
-  return demoData();
-}
-
-let S = loadData();   // S = 整個應用的資料：{ spaces, members, items }
-
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 無痕模式等情況存不了 */ }
-}
-
-// 檢查匯入的檔案格式，回傳整理過的資料；格式不對回傳 null
-function validateBackup(raw) {
-  if (!raw || !Array.isArray(raw.spaces) || !Array.isArray(raw.members) || !Array.isArray(raw.items)) return null;
-  const spaces = raw.spaces
-    .filter((s) => s && s.id && typeof s.name === 'string')
-    .map((s) => ({ id: String(s.id), name: s.name.slice(0, 12) }));
-  if (!spaces.length) return null;
-  const members = raw.members
-    .filter((m) => m && m.id && typeof m.name === 'string')
-    .map((m) => ({ id: String(m.id), name: m.name.slice(0, 10) }));
-  const items = raw.items
-    .filter((i) => i && typeof i.name === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.date))
-    .map((i) => ({
-      id: String(i.id || uid('i')),
-      name: i.name.slice(0, 30),
-      cat: ICON[i.cat] ? i.cat : '其他',
-      space: spaces.some((s) => s.id === i.space) ? i.space : spaces[0].id,
-      qty: Math.max(1, parseInt(i.qty, 10) || 1),
-      unit: String(i.unit || '個').slice(0, 6),
-      price: Math.max(0, Number(i.price) || 0),
-      buyer: members.some((m) => m.id === i.buyer) ? i.buyer : '',
-      date: i.date,
-    }));
-  return { spaces, members, items };
 }
 
 /* ===== 3. 小工具 ===== */
@@ -128,7 +60,7 @@ const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
 const initial = (name) => esc(String(name).charAt(0));
 const findMember = (id) => S.members.find((m) => m.id === id);
 const spaceName = (id) => (S.spaces.find((s) => s.id === id) || { name: '未指定' }).name;
-const valueOf = (item) => (item.price || 0) * item.qty;   // 成本 = 單價 × 目前數量
+const valueOf = (item) => (item.price || 0) * item.qty;   // 成本 = 單價 × 數量
 
 function daysLeft(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -144,13 +76,22 @@ function expiryLabel(d) {
   return `剩 ${d} 天`;
 }
 
+// 頁面上方的提示列：載入中、新增成功、錯誤
+let noticeTimer = null;
+function showNotice(text, type = '', autoHide = false) {
+  const el = $('notice');
+  clearTimeout(noticeTimer);
+  el.textContent = text;
+  el.className = 'notice ' + type;
+  el.hidden = !text;
+  if (autoHide) noticeTimer = setTimeout(() => { el.hidden = true; }, 3000);
+}
+
 /* ===== 4. 畫面層：只負責把資料畫出來 ===== */
 function renderAll() {
-  // 篩選條件指到已被刪掉的空間或成員時，退回「全部」
   if (!['all', 'none'].includes(memberFilter) && !findMember(memberFilter)) memberFilter = 'all';
-  // 正在看的空間被刪掉了，回到主畫面
   if (view === 'list' && spaceFilter !== 'all' && !S.spaces.some((s) => s.id === spaceFilter)) {
-    view = 'home'; spaceFilter = 'all'; history.replaceState(null, '', location.pathname + location.search);
+    view = 'home'; spaceFilter = 'all';
   }
   $('home').hidden = view !== 'home';
   $('detail').hidden = view === 'home';
@@ -298,7 +239,7 @@ function itemCard(i) {
     ? `<span class="av">${initial(buyer.name)}</span>${esc(buyer.name)} 買的`
     : '未指定購買者';
   return `
-    <li class="item ${statusOf(d)}" data-id="${i.id}">
+    <li class="item ${statusOf(d)}">
       <div class="top">
         <span class="ico" aria-hidden="true">${ICON[i.cat] || '📦'}</span>
         <div class="top-text">
@@ -308,49 +249,26 @@ function itemCard(i) {
         <span class="badge">${expiryLabel(d)}</span>
       </div>
       <div class="row">
-        <div class="qty">
-          <button type="button" data-act="dec" aria-label="減少數量">−</button>
-          <span>${i.qty} ${esc(i.unit)}</span>
-          <button type="button" data-act="inc" aria-label="增加數量">＋</button>
-        </div>
+        <span class="qty">${i.qty} ${esc(i.unit)}</span>
         <span class="date">${i.date}</span>
       </div>
       <div class="row">
         <span class="chip">${buyerHtml}</span>
         <span class="money">${money(valueOf(i))}</span>
       </div>
-      <div class="mini">
-        <button type="button" data-act="edit">編輯</button>
-        <button type="button" class="del" data-act="del">${armed === i.id ? '再按一次確認刪除' : '刪除'}</button>
-      </div>
     </li>`;
 }
 
-// 管理面板的兩個清單（只在新增／刪除時重畫，改名時不重畫以免輸入框失去焦點）
+// 管理面板的兩個清單（只能新增，所以只列出名稱與數量）
 function renderManage() {
   $('spaceList').innerHTML = S.spaces.map((s) => {
     const n = S.items.filter((i) => i.space === s.id).length;
-    const isLast = S.spaces.length < 2;
-    const isArmed = armed === s.id;
-    return `
-      <div class="edit-row" data-kind="space" data-id="${s.id}">
-        <input value="${esc(s.name)}" maxlength="12" aria-label="儲存空間名稱">
-        <span class="cnt">${n} 項</span>
-        <button type="button" class="btn danger${isArmed ? ' armed' : ''}" data-del="space"${isLast ? ' disabled title="至少要保留一個儲存空間"' : ''}>${isArmed ? '確認刪除' : '刪除'}</button>
-      </div>`;
-  }).join('');
+    return `<div class="edit-row"><span class="row-name">${esc(s.name)}</span><span class="cnt">${n} 項</span></div>`;
+  }).join('') || '<p class="hint">還沒有儲存空間，請在下方新增。</p>';
 
-  $('memberList').innerHTML = S.members.length
-    ? S.members.map((m) => {
-        const isArmed = armed === m.id;
-        return `
-          <div class="edit-row" data-kind="member" data-id="${m.id}">
-            <span class="av">${initial(m.name)}</span>
-            <input value="${esc(m.name)}" maxlength="10" aria-label="成員名稱">
-            <button type="button" class="btn danger${isArmed ? ' armed' : ''}" data-del="member">${isArmed ? '確認刪除' : '刪除'}</button>
-          </div>`;
-      }).join('')
-    : '<p class="hint">還沒有成員，請在下方新增。</p>';
+  $('memberList').innerHTML = S.members.map((m) =>
+    `<div class="edit-row"><span class="av">${initial(m.name)}</span><span class="row-name">${esc(m.name)}</span></div>`
+  ).join('') || '<p class="hint">還沒有成員，請在下方新增。</p>';
 }
 
 function showBackupMessage(text, type = '') {
@@ -361,15 +279,14 @@ function showBackupMessage(text, type = '') {
 
 /* ===== 5. 事件層：按鈕與輸入 ===== */
 
-/* --- 管理儲存空間與成員 --- */
-// 統計列的三個展開面板（成本、過期損失、管理）一次只開一個；name 傳 null 代表全部收起
+/* --- 統計列的三個展開面板（成本、過期損失、管理），一次只開一個 --- */
 const PANELS = { cost: 'costBtn', loss: 'lossBtn', manage: 'manageBtn' };
 function setPanel(name) {
   for (const [key, btnId] of Object.entries(PANELS)) {
     $(key).hidden = key !== name;
     $(btnId).setAttribute('aria-expanded', key === name);
   }
-  if (name === 'manage') { armed = null; renderManage(); }
+  if (name === 'manage') renderManage();
 }
 const togglePanel = (name) => setPanel($(name).hidden ? name : null);
 const toggleManage = (open) => {
@@ -391,60 +308,29 @@ document.querySelector('.seg').onclick = (e) => {
   if (btn) showManageTab(btn.dataset.tab);
 };
 
-function addNamed(inputId, list, prefix) {
+/* --- 新增儲存空間、新增成員 --- */
+async function addNamed(inputId, table, list, label) {
   const name = $(inputId).value.trim();
   if (!name) return;
-  list.push({ id: uid(prefix), name });
-  $(inputId).value = '';
-  save(); renderManage(); renderAll();
+  try {
+    const row = await insertRow(table, { name });
+    list.push({ id: row.id, name: row.name });
+    $(inputId).value = '';
+    renderManage(); renderAll();
+    showNotice(`已新增${label}「${row.name}」`, 'ok', true);
+  } catch (err) {
+    showNotice(`新增${label}失敗：${err.message}`, 'err');
+  }
 }
-$('addSpace').onclick = () => addNamed('newSpace', S.spaces, 's');
-$('addMember').onclick = () => addNamed('newMember', S.members, 'm');
+$('addSpace').onclick = () => addNamed('newSpace', 'fridge_spaces', S.spaces, '儲存空間');
+$('addMember').onclick = () => addNamed('newMember', 'fridge_members', S.members, '成員');
 for (const [inputId, btnId] of [['newSpace', 'addSpace'], ['newMember', 'addMember']]) {
   $(inputId).onkeydown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); $(btnId).click(); }
   };
 }
 
-// 刪除：第一次按進入「待確認」，第二次才真的刪
-function onManageClick(e) {
-  const btn = e.target.closest('[data-del]');
-  if (!btn || btn.disabled) return;
-  const { id } = btn.closest('.edit-row').dataset;
-  if (armed !== id) { armed = id; renderManage(); return; }
-  armed = null;
-  if (btn.dataset.del === 'space') {
-    if (S.spaces.length < 2) return;
-    S.spaces = S.spaces.filter((s) => s.id !== id);
-    S.items = S.items.filter((i) => i.space !== id);   // 空間裡的食材一併移除
-  } else {
-    S.members = S.members.filter((m) => m.id !== id);
-    S.items.forEach((i) => { if (i.buyer === id) i.buyer = ''; });
-  }
-  save(); renderManage(); renderAll();
-}
-
-// 改名：輸入框離開焦點時儲存
-function onManageChange(e) {
-  const input = e.target;
-  if (input.tagName !== 'INPUT') return;
-  const row = input.closest('.edit-row');
-  const list = row.dataset.kind === 'space' ? S.spaces : S.members;
-  const record = list.find((x) => x.id === row.dataset.id);
-  if (!record) return;
-  const name = input.value.trim();
-  if (!name) { input.value = record.name; return; }
-  record.name = name;
-  const avatar = row.querySelector('.av');
-  if (avatar) avatar.textContent = name.charAt(0);
-  save(); renderAll();
-}
-for (const id of ['spaceList', 'memberList']) {
-  $(id).onclick = onManageClick;
-  $(id).onchange = onManageChange;
-}
-
-/* --- 備份：匯出與匯入 --- */
+/* --- 備份：匯出目前資料 --- */
 $('exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
@@ -457,82 +343,55 @@ $('exportBtn').onclick = () => {
   showBackupMessage('已產生備份檔，請在下載資料夾找 fridge-backup 開頭的檔案。', 'ok');
 };
 
-$('importBtn').onclick = () => $('importFile').click();
-$('importFile').onchange = (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  pendingImport = null;
-  $('importConfirm').hidden = true;
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const data = validateBackup(JSON.parse(reader.result));
-      if (!data) throw new Error('格式不符');
-      pendingImport = data;
-      $('importConfirm').hidden = false;
-      showBackupMessage(`讀到 ${data.spaces.length} 個空間、${data.members.length} 位成員、${data.items.length} 筆食材。按下確認後會取代目前所有資料。`);
-    } catch (err) {
-      showBackupMessage('這不是有效的備份檔，請選擇由本頁匯出的 JSON 檔。', 'err');
-    }
-  };
-  reader.onerror = () => showBackupMessage('讀取檔案失敗，請再試一次。', 'err');
-  reader.readAsText(file);
-};
-$('importConfirm').onclick = () => {
-  if (!pendingImport) return;
-  S = pendingImport;
-  pendingImport = null;
-  $('importConfirm').hidden = true;
-  armed = null;
-  save(); renderManage(); renderAll();
-  showBackupMessage('匯入完成。', 'ok');
-};
-
-/* --- 新增／編輯食材 --- */
-function openForm(item) {
-  editId = item ? item.id : null;
-  $('formTitle').textContent = item ? '編輯食材' : '新增食材';
+/* --- 新增食材 --- */
+function openForm() {
   $('fSpace').innerHTML = S.spaces.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   $('fBuyer').innerHTML = '<option value="">未指定</option>' +
     S.members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
-  $('fName').value = item ? item.name : '';
-  $('fCat').value = item ? item.cat : '蔬果';
-  $('fSpace').value = item ? item.space : (view === 'list' && spaceFilter !== 'all' ? spaceFilter : S.spaces[0].id);
-  $('fQty').value = item ? item.qty : 1;
-  $('fUnit').value = item ? item.unit : '個';
-  $('fPrice').value = item ? item.price : 0;
-  $('fBuyer').value = item ? item.buyer : '';
-  $('fDate').value = item ? item.date : offset(7);
+  $('fName').value = '';
+  $('fCat').value = '蔬果';
+  $('fSpace').value = view === 'list' && spaceFilter !== 'all' ? spaceFilter : (S.spaces[0] || {}).id || '';
+  $('fQty').value = 1;
+  $('fUnit').value = '個';
+  $('fPrice').value = 0;
+  $('fBuyer').value = '';
+  $('fDate').value = offset(7);
   $('form').hidden = false;
   $('fName').focus();
   $('form').scrollIntoView({ block: 'nearest' });
 }
-function closeForm() { $('form').hidden = true; editId = null; }
+function closeForm() { $('form').hidden = true; }
 
-$('addBtn').onclick = () => openForm(null);
+$('addBtn').onclick = () => {
+  if (!S.spaces.length) { showNotice('請先到「管理」新增一個儲存空間。', 'err'); return; }
+  openForm();
+};
 $('cancelBtn').onclick = closeForm;
-$('form').onsubmit = (e) => {
+$('form').onsubmit = async (e) => {
   e.preventDefault();
-  const rec = {
+  const row = {
     name: $('fName').value.trim(),
     cat: $('fCat').value,
-    space: $('fSpace').value,
+    space_id: $('fSpace').value,
     qty: Math.max(1, parseInt($('fQty').value, 10) || 1),
     unit: $('fUnit').value.trim() || '個',
     price: Math.max(0, parseFloat($('fPrice').value) || 0),
-    buyer: $('fBuyer').value,
-    date: $('fDate').value,
+    buyer_id: $('fBuyer').value || null,
+    expiry: $('fDate').value,
   };
-  if (!rec.name || !rec.date) return;
-  if (editId !== null) S.items = S.items.map((i) => (i.id === editId ? { ...rec, id: i.id } : i));
-  else S.items.push({ ...rec, id: uid('i') });
-  save(); closeForm(); renderAll();
+  if (!row.name || !row.expiry || !row.space_id) return;
+  const submit = e.submitter;
+  if (submit) submit.disabled = true;
+  try {
+    S.items.push(toItem(await insertRow('fridge_items', row)));
+    closeForm(); renderAll();
+    showNotice(`已新增「${row.name}」`, 'ok', true);
+  } catch (err) {
+    showNotice(`新增食材失敗：${err.message}`, 'err');
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 };
-
-/* --- 篩選與卡片操作 --- */
-$('q').oninput = renderList;
-$('memberFilter').onchange = (e) => { memberFilter = e.target.value; renderList(); };
 
 /* --- 主畫面：點圓圈進入空間、點中間看全部 --- */
 $('ring').onclick = (e) => {
@@ -550,34 +409,26 @@ $('ring').onclick = (e) => {
 $('hub').onclick = () => { location.hash = 'all'; };
 $('backBtn').onclick = () => { location.hash = ''; };
 window.addEventListener('hashchange', () => { route(); renderAll(); window.scrollTo(0, 0); });
-$('list').onclick = (e) => {
-  const btn = e.target.closest('[data-act]');
-  if (!btn) return;
-  const id = btn.closest('.item').dataset.id;
-  const item = S.items.find((i) => i.id === id);
-  if (!item) return;
-  const act = btn.dataset.act;
-  if (act === 'inc') { item.qty++; armed = null; }
-  else if (act === 'dec') { if (item.qty > 1) item.qty--; armed = null; }
-  else if (act === 'edit') { armed = null; openForm(item); return; }
-  else if (act === 'del') {
-    if (armed !== id) { armed = id; renderList(); return; }
-    S.items = S.items.filter((i) => i.id !== id);
-    armed = null;
-  }
-  save(); renderAll();
-};
-// 點到別處就取消「待確認刪除」
-document.addEventListener('click', (e) => {
-  if (armed === null || e.target.closest('.del') || e.target.closest('[data-del]')) return;
-  armed = null;
-  if (view === 'list') renderList();
-  if (!$('manage').hidden) renderManage();
-});
 
-/* --- 啟動 --- */
+/* --- 清單頁的篩選 --- */
+$('q').oninput = renderList;
+$('memberFilter').onchange = (e) => { memberFilter = e.target.value; renderList(); };
+
+/* --- 啟動：先顯示今天日期，再從雲端載入資料 --- */
 const weekday = ['日', '一', '二', '三', '四', '五', '六'];
 const now = new Date();
 $('today').textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}（週${weekday[now.getDay()]}）`;
-route();
-renderAll();
+
+async function start() {
+  showNotice('資料載入中…');
+  renderAll();
+  try {
+    await loadData();
+    showNotice('');
+  } catch (err) {
+    showNotice(`無法讀取雲端資料：${err.message}。請重新整理頁面再試。`, 'err');
+  }
+  route();
+  renderAll();
+}
+start();

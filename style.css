@@ -168,3 +168,10 @@ label input,label select{padding:10px 12px;border:0;border-radius:var(--r-sm);ba
 .mini .del{color:var(--bad)}
 .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:32px 0}
 footer{color:var(--muted);font-size:.78rem}
+
+/* ===== 10. 提示列與唯讀清單 ===== */
+.notice{margin:0;padding:10px 14px;border-radius:var(--r-sm);background:var(--accent-soft);font-weight:700;font-size:.9rem}
+.notice.ok{background:var(--ok-soft);color:var(--ok)}
+.notice.err{background:var(--bad-soft);color:var(--bad)}
+.row-name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:700}
+.qty{font:600 .95rem var(--font-en)}

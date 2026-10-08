@@ -19,6 +19,8 @@
     </div>
   </header>
 
+  <p class="notice" id="notice" role="status" hidden></p>
+
   <form id="form" hidden>
     <h2 id="formTitle">新增食材</h2>
     <label for="fName">名稱<input id="fName" required maxlength="30" placeholder="例如：雞蛋"></label>
@@ -68,24 +70,21 @@
       </div>
 
       <div class="pane" data-pane="spaces">
-        <p class="hint">例如：廚房冰箱、車庫冷凍櫃、儲藏室。直接修改名稱，離開欄位即儲存。</p>
+        <p class="hint">例如：廚房冰箱、車庫冷凍櫃、儲藏室。示範版只能新增，不能修改或刪除。</p>
         <div class="stack" id="spaceList"></div>
         <div class="edit-row"><input id="newSpace" maxlength="12" placeholder="新增儲存空間名稱" aria-label="新儲存空間名稱"><button class="btn primary" id="addSpace" type="button">新增</button></div>
       </div>
 
       <div class="pane" data-pane="members" hidden>
-        <p class="hint">成員可以被指定為食材的購買者，用來統計誰花了多少。</p>
+        <p class="hint">成員可以被指定為食材的購買者。示範版只能新增，不能修改或刪除。</p>
         <div class="stack" id="memberList"></div>
         <div class="edit-row"><input id="newMember" maxlength="10" placeholder="新增成員名稱" aria-label="新成員名稱"><button class="btn primary" id="addMember" type="button">新增</button></div>
       </div>
 
       <div class="pane" data-pane="backup" hidden>
-        <p class="hint">資料只存在這個瀏覽器。換裝置或清除瀏覽器資料前，請先匯出備份檔。</p>
+        <p class="hint">資料存在雲端資料庫，任何裝置打開都是同一份。可以下載一份 JSON 備份檔。</p>
         <div class="btns">
-          <button class="btn" id="exportBtn" type="button">匯出備份（JSON）</button>
-          <button class="btn" id="importBtn" type="button">匯入備份</button>
-          <button class="btn primary" id="importConfirm" type="button" hidden>確認用備份覆蓋目前資料</button>
-          <input type="file" id="importFile" accept=".json,application/json" hidden>
+          <button class="btn" id="exportBtn" type="button">下載備份（JSON）</button>
         </div>
         <p class="hint" id="backupMsg" role="status"></p>
       </div>
@@ -112,9 +111,20 @@
     <ul class="list" id="list"></ul>
   </section>
 
-  <footer>範例資料，可自由修改或刪除。資料只存在這台裝置的瀏覽器中，不同手機或電腦不會同步。成本 = 單價 × 目前數量。</footer>
+  <footer>資料存在 Supabase 雲端資料庫，任何人打開看到的都是同一份。示範版只開放讀取與新增。成本 = 單價 × 數量。</footer>
 </div>
 
-<script src="app.js"></script>
+<!-- 連線到 Supabase：網址與 Publishable key 是公開用的，可以放在網頁裡。管理員等級的祕密金鑰絕對不要放進網頁。 -->
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  window.supabaseClient = createClient(
+    'https://aucnanynfzsbzffbqemh.supabase.co',
+    'sb_publishable_yqkci-NFbPcfVczbnEhYpA_TKJ3TgeL'
+  );
+  // 連線準備好之後才載入主程式
+  const app = document.createElement('script');
+  app.src = 'app.js';
+  document.body.appendChild(app);
+</script>
 </body>
 </html>
