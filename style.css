@@ -34,7 +34,7 @@
 
 /* ===== 2. 基本設定 ===== */
 *{box-sizing:border-box}
-html{color-scheme:light dark}
+html{color-scheme:light dark;overflow-x:hidden;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.7 var(--font-body);padding-inline:16px;padding-block:24px 56px;overflow-x:hidden}
 .wrap{max-width:760px;margin-inline:auto;display:flex;flex-direction:column;gap:20px}
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
@@ -63,7 +63,7 @@ button{cursor:pointer}
 }
 
 /* ===== 4. 圓形主畫面 ===== */
-.orbit{position:relative;width:100%;max-width:560px;aspect-ratio:1;margin-inline:auto}
+.orbit{position:relative;width:100%;max-width:560px;aspect-ratio:1;margin-inline:auto;overflow:hidden}   /* 轉動的外圈四角不能超出，否則 iPad 會左右晃動 */
 .orbit::before{content:"";position:absolute;inset:calc((50 - var(--R,35)) * 1%);border:1.5px dashed var(--line);border-radius:50%}   /* 軌道線 */
 .ring{position:absolute;inset:0;animation:spin 120s linear infinite}
 .sp{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1;border:0;border-radius:50%;padding:0;display:grid;place-items:center;color:var(--ink);background:var(--accent-soft);box-shadow:0 0 0 1.5px var(--line) inset}
@@ -181,3 +181,36 @@ form.login{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 form.login .hint,form.login .actions{grid-column:1/-1}
 .edit-row .row-name+.cnt{margin-left:auto}
 .mini{align-items:center}
+
+/* ===== 12. 手機、iPad、電腦的自適應 ===== */
+/* iOS 的輸入框字級小於 16px 時，點進去會自動放大整個畫面，所以輸入元件固定 16px */
+input,select,textarea{font-size:16px}
+.btn{min-height:44px}
+
+/* 觸控裝置（手機、iPad）：按鈕做大一點，比較好按 */
+@media (pointer:coarse){
+  .qty button{width:44px;height:44px}
+  .mini button{padding:10px 12px}
+  .seg-btn{min-height:44px}
+  .edit-row .btn{min-height:44px}
+}
+
+/* 手機：標題列的按鈕撐滿一排 */
+@media (max-width:480px){
+  .hbtns{width:100%}
+  .hbtns .btn{flex:1}
+  .tile{max-width:none}
+}
+
+/* iPad 與電腦：內容放寬，面板置中不要拉太長 */
+@media (min-width:700px){
+  body{padding-inline:24px;font-size:16px}
+  .wrap{max-width:980px}
+  .orbit{max-width:600px}
+  .notice,.panel,.cost,form{width:100%;max-width:760px;margin-inline:auto}
+  .list{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+}
+@media (min-width:1100px){
+  .wrap{max-width:1120px}
+  .list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+}
