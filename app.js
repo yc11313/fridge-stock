@@ -10,7 +10,7 @@
 const sb = window.supabaseClient;   // 由 index.html 建立
 const ICON = {
   '蔬果': '🥬', '肉類海鮮': '🥩', '蛋奶': '🥛', '飲品': '🧃',
-  '熟食剩菜': '🍱', '調味乾貨': '🧂', '其他': '📦',
+  '熟食': '🍱', '半成品': '🥟', '零食': '🍪', '調味乾貨': '🧂', '其他': '📦',
 };
 const $ = (id) => document.getElementById(id);
 

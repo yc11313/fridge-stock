@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>冰箱庫存管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="style.css?v=20261011">
+<link rel="stylesheet" href="style.css?v=20261012">
 </head>
 <body>
 <div class="wrap">
@@ -38,7 +38,7 @@
     <h2 id="formTitle">新增食材</h2>
     <label for="fName">名稱<input id="fName" required maxlength="30" placeholder="例如：雞蛋"></label>
     <label for="fCat">分類
-      <select id="fCat"><option>蔬果</option><option>肉類海鮮</option><option>蛋奶</option><option>飲品</option><option>熟食剩菜</option><option>調味乾貨</option><option>其他</option></select>
+      <select id="fCat"><option>蔬果</option><option>肉類海鮮</option><option>蛋奶</option><option>飲品</option><option>熟食</option><option>半成品</option><option>零食</option><option>調味乾貨</option><option>其他</option></select>
     </label>
     <label for="fSpace">放在哪裡<select id="fSpace"></select></label>
     <label for="fQty">數量<input id="fQty" type="number" min="1" max="999" value="1" required></label>
@@ -128,13 +128,13 @@
 </div>
 
 <!-- 連線到 Supabase：網址與 Publishable key 是公開用的，可以放在網頁裡。管理員等級的祕密金鑰絕對不要放進網頁。 -->
-<script src="supabase-lite.js?v=20261011"></script>
+<script src="supabase-lite.js?v=20261012"></script>
 <script>
   window.supabaseClient = createLiteClient(
     'https://aucnanynfzsbzffbqemh.supabase.co',
     'sb_publishable_yqkci-NFbPcfVczbnEhYpA_TKJ3TgeL'
   );
 </script>
-<script src="app.js?v=20261011"></script>
+<script src="app.js?v=20261012"></script>
 </body>
 </html>
