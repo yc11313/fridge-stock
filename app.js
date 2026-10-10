@@ -160,7 +160,7 @@ function renderHome() {
   const R = 50 - size / 2 - 2;                   // 軌道半徑（%）
   const pos = (i) => {
     const a = ((-90 + (i * 360) / k) * Math.PI) / 180;
-    return `left:${(50 + R * Math.cos(a)).toFixed(2)}%;top:${(50 + R * Math.sin(a)).toFixed(2)}%;width:${size}%`;
+    return `left:${(50 + R * Math.cos(a)).toFixed(2)}%;top:${(50 + R * Math.sin(a)).toFixed(2)}%;width:${size}%;height:${size}%`;
   };
   const circles = S.spaces.map((s, i) => {
     const st = statsOf(S.items.filter((x) => x.space === s.id));
@@ -600,6 +600,12 @@ const now = new Date();
 $('today').textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}（週${weekday[now.getDay()]}）`;
 
 async function start() {
+  if (!sb) {   // 資料庫連線元件沒載入成功（網路問題，或瀏覽器版本太舊）
+    showNotice('無法連線到資料庫。請檢查網路，或更新 iPadOS／iOS 版本後再試。', 'err');
+    route();
+    renderAll();
+    return;
+  }
   showNotice('資料載入中…');
   renderAll();
   try {
