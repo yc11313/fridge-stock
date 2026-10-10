@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>冰箱庫存管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="style.css?v=20261012">
+<link rel="stylesheet" href="style.css?v=20261013">
 </head>
 <body>
 <div class="wrap">
@@ -119,7 +119,7 @@
     </div>
     <div class="tools">
       <input type="search" id="q" placeholder="搜尋食材或分類" aria-label="搜尋食材">
-      <select id="memberFilter" aria-label="依購買者篩選"></select>
+      <select id="catFilter" aria-label="依分類篩選"></select>
     </div>
     <ul class="list" id="list"></ul>
   </section>
@@ -128,13 +128,13 @@
 </div>
 
 <!-- 連線到 Supabase：網址與 Publishable key 是公開用的，可以放在網頁裡。管理員等級的祕密金鑰絕對不要放進網頁。 -->
-<script src="supabase-lite.js?v=20261012"></script>
+<script src="supabase-lite.js?v=20261013"></script>
 <script>
   window.supabaseClient = createLiteClient(
     'https://aucnanynfzsbzffbqemh.supabase.co',
     'sb_publishable_yqkci-NFbPcfVczbnEhYpA_TKJ3TgeL'
   );
 </script>
-<script src="app.js?v=20261012"></script>
+<script src="app.js?v=20261013"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 // 畫面上的暫時狀態（不存檔）
 let view = 'home';         // 'home' = 圓形主畫面；'list' = 某個儲存空間（或全部）的食材清單
 let spaceFilter = 'all';   // 清單檢視時，目前看的儲存空間
-let memberFilter = 'all';  // 目前選的購買者篩選
+let catFilter = 'all';     // 目前選的分類篩選（'all' = 所有分類）
 let isEditor = false;      // 登入且在編輯者白名單內，才能編輯與刪除
 let editId = null;         // 正在編輯的食材 id；null 表示新增
 let armed = null;          // 已按過一次「刪除」、等待第二次確認的 id
@@ -120,7 +120,6 @@ function showNotice(text, type = '', autoHide = false) {
 
 /* ===== 4. 畫面層：只負責把資料畫出來 ===== */
 function renderAll() {
-  if (!['all', 'none'].includes(memberFilter) && !findMember(memberFilter)) memberFilter = 'all';
   if (view === 'list' && spaceFilter !== 'all' && !S.spaces.some((s) => s.id === spaceFilter)) {
     view = 'home'; spaceFilter = 'all';
   }
@@ -130,7 +129,7 @@ function renderAll() {
   renderCost();
   renderLoss();
   if (view === 'home') renderHome();
-  else { renderDetailHead(); renderMemberFilter(); renderList(); }
+  else { renderDetailHead(); renderCatFilter(); renderList(); }
 }
 
 // 一組食材的統計：數量、3 天內到期、已過期、庫存價值、過期損失
@@ -196,10 +195,15 @@ function route() {
   else { view = 'home'; spaceFilter = 'all'; }
 }
 
-function renderMemberFilter() {
-  const options = S.members.map((m) => `<option value="${m.id}">${esc(m.name)} 買的</option>`).join('');
-  $('memberFilter').innerHTML = `<option value="all">所有成員</option>${options}<option value="none">未指定購買者</option>`;
-  $('memberFilter').value = memberFilter;
+function renderCatFilter() {
+  // 數字是目前這個空間（或全部）裡該分類的食材數，方便一眼看出哪裡有東西
+  const scope = spaceFilter === 'all' ? S.items : S.items.filter((i) => i.space === spaceFilter);
+  const options = Object.keys(ICON).map((c) => {
+    const n = scope.filter((i) => i.cat === c).length;
+    return `<option value="${c}">${ICON[c]} ${c}（${n}）</option>`;
+  }).join('');
+  $('catFilter').innerHTML = `<option value="all">所有分類（${scope.length}）</option>${options}`;
+  $('catFilter').value = catFilter;
 }
 
 // 庫存價值明細：各儲存空間裡尚未過期的食材成本（合計 = 統計列的「庫存價值」）
@@ -250,8 +254,7 @@ function renderList() {
   const shown = S.items
     .filter((i) => {
       if (spaceFilter !== 'all' && i.space !== spaceFilter) return false;
-      if (memberFilter === 'none') { if (findMember(i.buyer)) return false; }
-      else if (memberFilter !== 'all' && i.buyer !== memberFilter) return false;
+      if (catFilter !== 'all' && i.cat !== catFilter) return false;
       return !q || (i.name + i.cat).toLowerCase().includes(q);
     })
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));   // 最快到期的排最前面
@@ -520,11 +523,11 @@ $('ring').onclick = (e) => {
 };
 $('hub').onclick = () => { location.hash = 'all'; };
 $('backBtn').onclick = () => { location.hash = ''; };
-window.addEventListener('hashchange', () => { route(); renderAll(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { catFilter = 'all'; $('q').value = ''; route(); renderAll(); window.scrollTo(0, 0); });
 
 /* --- 清單頁的篩選 --- */
 $('q').oninput = renderList;
-$('memberFilter').onchange = (e) => { memberFilter = e.target.value; renderList(); };
+$('catFilter').onchange = (e) => { catFilter = e.target.value; renderList(); };
 
 /* --- 編輯者：食材卡片上的數量加減、編輯、刪除 --- */
 $('list').onclick = async (e) => {
