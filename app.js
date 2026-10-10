@@ -601,7 +601,7 @@ $('today').textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDa
 
 async function start() {
   if (!sb) {   // 資料庫連線元件沒載入成功（網路問題，或瀏覽器版本太舊）
-    showNotice('無法連線到資料庫。請檢查網路，或更新 iPadOS／iOS 版本後再試。', 'err');
+    showNotice('無法連線到資料庫。請檢查網路後重新整理頁面。', 'err');
     route();
     renderAll();
     return;

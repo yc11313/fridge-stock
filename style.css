@@ -69,16 +69,14 @@ button{cursor:pointer}
 .sp{position:absolute;transform:translate(-50%,-50%);border:0;border-radius:50%;padding:0;display:grid;place-items:center;color:var(--ink);background:var(--accent-soft);box-shadow:0 0 0 1.5px var(--line) inset}
 .sp-in{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:8%;text-align:center;animation:spin-rev 120s linear infinite}   /* 反向轉，文字才會保持正的 */
 .sp-name{font-weight:900;font-size:.85rem;font-size:clamp(.7rem,2.9vw,1rem);line-height:1.25;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.sp-n{font:600 .72rem/1.2 var(--font-en)}
-.sp-n{font:600 clamp(.62rem,2.3vw,.8rem)/1.2 var(--font-en)}
+.sp-n{font-family:var(--font-en);font-weight:600;line-height:1.2;font-size:.72rem;font-size:clamp(.62rem,2.3vw,.8rem)}   /* font-size 不放 var()，舊瀏覽器才會用前一行的備用值 */
 .sp-plus{font:700 1.5rem/1 var(--font-en)}
 .flag{font-size:.65rem;font-size:clamp(.58rem,2.1vw,.72rem);font-weight:700;color:#fff;background:var(--bad);border-radius:999px;padding:0 7px;line-height:1.5}
 .sp.is-soon{background:var(--peach-soft);box-shadow:0 0 0 2px var(--peach) inset}
 .sp.is-bad{background:var(--bad-soft);box-shadow:0 0 0 2px var(--bad) inset}
 .sp.add{background:transparent;box-shadow:none;border:1.5px dashed var(--muted);color:var(--muted)}
 .hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38%;height:38%;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4%;text-align:center;box-shadow:0 0 0 10px var(--accent-soft)}
-.hub-num{font:800 2.6rem/1 var(--font-en)}
-.hub-num{font:800 clamp(2rem,10vw,3.4rem)/1 var(--font-en)}
+.hub-num{font-family:var(--font-en);font-weight:800;line-height:1;font-size:2.6rem;font-size:clamp(2rem,10vw,3.4rem)}
 .hub-label{font-size:.8rem;font-size:clamp(.7rem,2.6vw,.9rem);font-weight:700;margin-bottom:4px}
 .hub-sub{display:flex;flex-direction:column;font-size:.68rem;font-size:clamp(.58rem,2.2vw,.75rem);line-height:1.35;opacity:.95}
 .hub-sub b{font-family:var(--font-en);font-weight:800}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>冰箱庫存管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261010">
 </head>
 <body>
 <div class="wrap">
@@ -128,28 +128,13 @@
 </div>
 
 <!-- 連線到 Supabase：網址與 Publishable key 是公開用的，可以放在網頁裡。管理員等級的祕密金鑰絕對不要放進網頁。 -->
-<script type="module">
-  // 用 import() 載入：失敗時（例如很舊的瀏覽器）也會繼續載入主程式，頁面才不會一片空白
-  function loadApp() {
-    const app = document.createElement('script');
-    app.src = 'app.js';
-    document.body.appendChild(app);
-  }
-  import('https://esm.sh/@supabase/supabase-js@2')
-    .then(function (m) {
-      window.supabaseClient = m.createClient(
-        'https://aucnanynfzsbzffbqemh.supabase.co',
-        'sb_publishable_yqkci-NFbPcfVczbnEhYpA_TKJ3TgeL'
-      );
-    })
-    .catch(function (err) { window.supabaseError = err; })
-    .then(loadApp);
+<script src="supabase-lite.js?v=20261010"></script>
+<script>
+  window.supabaseClient = createLiteClient(
+    'https://aucnanynfzsbzffbqemh.supabase.co',
+    'sb_publishable_yqkci-NFbPcfVczbnEhYpA_TKJ3TgeL'
+  );
 </script>
-<script nomodule>
-  // 連模組都不支援的舊瀏覽器：直接說明，不要讓畫面空白
-  document.getElementById('notice').hidden = false;
-  document.getElementById('notice').className = 'notice err';
-  document.getElementById('notice').textContent = '這個瀏覽器版本太舊，無法載入資料。請更新 iPadOS／iOS 或改用較新的瀏覽器。';
-</script>
+<script src="app.js?v=20261010"></script>
 </body>
 </html>
